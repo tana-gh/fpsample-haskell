@@ -41,18 +41,20 @@ newtype TestApp s m a = TestApp
     , MonadIO
     )
 
-data TestState = TestState
-    { readDataCalled  :: Bool
-    , writeDataCalled :: Bool
-    }
+data TestEvent
+    = ReadDataCalled
+    | WriteDataCalled
+    deriving (Eq, Show)
+
+newtype TestState = TestState [TestEvent]
 
 instance Monad m => MonadDataReader (TestApp TestState m) where
     readData = do
-        modify $ \s -> s { readDataCalled = True }
+        modify $ \(TestState events) -> TestState (ReadDataCalled : events)
         return Data { name = "foo", age = 1 }
         
 instance Monad m => MonadDataWriter (TestApp TestState m) where
-    writeData _ = modify $ \s -> s { writeDataCalled = True }
+    writeData _ = modify $ \(TestState events) -> TestState (WriteDataCalled : events)
 
 instance Monad m => MonadApp (TestApp TestState m)
 
@@ -60,9 +62,8 @@ spec :: Spec
 spec =
     describe "app" $
         it "readData and writeData are called correctly" $ do
-            st <- (`execStateT` TestState False False) $ runApp app
-            readDataCalled  st `shouldBe` True
-            writeDataCalled st `shouldBe` True
+            (TestState events) <- (`execStateT` TestState []) $ runApp app
+            events `shouldBe` [ WriteDataCalled, ReadDataCalled ]
 
 main :: IO ()
 main = hspec spec
